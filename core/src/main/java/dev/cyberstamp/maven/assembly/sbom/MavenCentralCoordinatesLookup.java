@@ -9,7 +9,7 @@ import java.util.Optional;
  * Looks up Maven coordinates by SHA-1 against the public Maven Central
  * search API ({@code search.maven.org}) by default. Requires no
  * configuration or credentials, but the search URL can be overridden (see
- * {@link RemoteArtifactLookup#setCentralUrl(String)}) — e.g. to point at an
+ * {@link Central#setUrl(String)}) — e.g. to point at an
  * internal mirror of the Central search API, or to adapt if Sonatype ever
  * changes its public API shape, without needing a new plugin release.
  */

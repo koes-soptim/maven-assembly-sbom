@@ -60,7 +60,7 @@ class MavenArtifactMatcherTest {
     @Test
     void budgetIsSharedAndOnlyConsumedByActualLookups() throws IOException {
         AtomicInteger lookups = new AtomicInteger();
-        BudgetedLookup.Budget budget = new BudgetedLookup.Budget(1);
+        BudgetedLookup.Budget budget = new BudgetedLookup.Budget("nexus", 1);
         CoordinatesLookup counting = sha1 -> {
             lookups.incrementAndGet();
             return Optional.empty();

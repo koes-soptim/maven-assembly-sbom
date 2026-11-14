@@ -1286,14 +1286,12 @@ class ArchiveAnalyzerTest {
     }
 
     private MavenArtifactMatcher createResolver(HttpServer stub, List<String> includes, List<String> excludes) {
-        RemoteArtifactLookup config = new RemoteArtifactLookup();
-        config.setEnabled(true);
-        config.setCentral(false);
-        config.setIncludes(includes);
-        config.setExcludes(excludes);
-        config.setNexusUrl("http://127.0.0.1:" + stub.getAddress().getPort()
+        Nexus nexus = new Nexus();
+        nexus.setIncludes(includes);
+        nexus.setExcludes(excludes);
+        nexus.setUrl("http://127.0.0.1:" + stub.getAddress().getPort()
                 + "/service/rest/v1/search?sha1=" + NexusCoordinatesLookup.PLACEHOLDER);
-        return RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
+        return MavenArtifactMatchers.create(List.of(nexus), false, serverId -> null).orElseThrow();
     }
 
     private ArchiveAnalyzer createAnalyzerWithRemoteLookup(MavenArtifactMatcher resolver) {

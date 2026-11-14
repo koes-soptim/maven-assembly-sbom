@@ -165,13 +165,13 @@ public class GenerateSbomMojo extends AbstractMojo {
     private ProductInfo product;
 
     /**
-     * Settings for identifying non-Maven-built archive entries (e.g. jars
-     * built with Gradle or Ant) by resolving their Maven coordinates from
-     * Maven Central and/or an internal Nexus or Artifactory instance, keyed
-     * by the entry's SHA-1 content hash. Disabled by default.
+     * Matchers that identify archive entries no built-in technique could
+     * match (e.g. jars built with Gradle or Ant) by their SHA-1, tried in the
+     * configured order: {@code <central/>}, {@code <nexus>} and
+     * {@code <artifactory>}. None by default.
      */
     @Parameter
-    private RemoteArtifactLookup remoteMavenCoordinatesLookup;
+    private List<MavenArtifactMatcherConfig> mavenArtifactMatchers;
 
     @Override
     public void execute() throws MojoExecutionException {
@@ -233,7 +233,7 @@ public class GenerateSbomMojo extends AbstractMojo {
         generator.setProduct(product);
         generator.setIdentityEvidence(identityEvidence);
         Bom bom;
-        try (MavenArtifactMatcher matcher = buildRemoteCoordinatesMatcher()) {
+        try (MavenArtifactMatcher matcher = buildMavenArtifactMatcher()) {
             generator.setMavenArtifactMatcher(matcher);
             bom = generator.generate(entries, null, externalBomList,
                     null, null, project.getPackaging());
@@ -261,55 +261,39 @@ public class GenerateSbomMojo extends AbstractMojo {
     }
 
     /**
-     * Builds the remote coordinates lookup matcher from {@link #remoteMavenCoordinatesLookup},
-     * resolving any {@code settings.xml} server credentials it references.
+     * Builds the matcher chain from {@link #mavenArtifactMatchers}, resolving
+     * any {@code settings.xml} server credentials they reference.
      *
-     * @return the matcher, or {@code null} if remote lookup is disabled or
-     *         not usable as configured
+     * @return the matcher, or {@code null} if no matcher is configured
+     * @throws MojoExecutionException if the configuration is invalid
      */
-    private MavenArtifactMatcher buildRemoteCoordinatesMatcher() {
-        if (remoteMavenCoordinatesLookup == null || !remoteMavenCoordinatesLookup.isEnabled()) {
-            return null;
+    private MavenArtifactMatcher buildMavenArtifactMatcher() throws MojoExecutionException {
+        try {
+            return MavenArtifactMatchers.create(mavenArtifactMatchers, session.isOffline(), this::resolveCredentials)
+                    .orElse(null);
+        } catch (IllegalArgumentException e) {
+            throw new MojoExecutionException(e.getMessage(), e);
         }
-        if (session.isOffline()) {
-            getLog().warn("Maven is running in offline mode; skipping remoteMavenCoordinatesLookup, "
-                    + "so files only identifiable remotely remain file components");
-            return null;
-        }
-        Credentials nexusCredentials = resolveCredentials(remoteMavenCoordinatesLookup.getNexusServerId());
-        Credentials artifactoryCredentials = resolveCredentials(remoteMavenCoordinatesLookup.getArtifactoryServerId());
-        return RemoteCoordinatesResolver.create(remoteMavenCoordinatesLookup,
-                nexusCredentials.username(), nexusCredentials.password(),
-                artifactoryCredentials.username(), artifactoryCredentials.password())
-                .orElse(null);
-    }
-
-    private record Credentials(String username, String password) {
-        private static final Credentials NONE = new Credentials(null, null);
     }
 
     /**
      * Resolves and decrypts the username/password of a {@code settings.xml}
      * {@code <server>} entry.
      *
-     * @param serverId the server id, or {@code null}/blank for anonymous access
-     * @return the decrypted credentials, or {@link Credentials#NONE} if no
-     *         server id is configured or no matching server is found
+     * @param serverId the server id
+     * @return the decrypted credentials, or {@code null} if no matching server
+     *         is found
      */
-    private Credentials resolveCredentials(String serverId) {
-        if (serverId == null || serverId.isBlank()) {
-            return Credentials.NONE;
-        }
+    private ServerCredentials resolveCredentials(String serverId) {
         Server server = session.getSettings().getServer(serverId);
         if (server == null) {
-            getLog().warn("No <server> with id '" + serverId
-                    + "' found in settings.xml; using anonymous access");
-            return Credentials.NONE;
+            getLog().warn("No <server> with id '" + serverId + "' found in settings.xml; using anonymous access");
+            return null;
         }
         SettingsDecryptionResult result = settingsDecrypter.decrypt(
                 new DefaultSettingsDecryptionRequest(server));
         Server decrypted = result.getServer() != null ? result.getServer() : server;
-        return new Credentials(decrypted.getUsername(), decrypted.getPassword());
+        return new ServerCredentials(decrypted.getUsername(), decrypted.getPassword());
     }
 
     private List<FileEntry> collectDirectoryEntries(Path dir, MessageDigest digest) throws IOException {

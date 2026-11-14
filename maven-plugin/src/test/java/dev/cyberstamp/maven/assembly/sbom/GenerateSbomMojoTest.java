@@ -483,7 +483,7 @@ class GenerateSbomMojoTest {
     }
 
     @Test
-    void remoteMavenCoordinatesLookupNotConfiguredLeavesNonMavenJarAsFileComponent() throws Exception {
+    void noMatchersConfiguredLeavesNonMavenJarAsFileComponent() throws Exception {
         createTestJar("WEB-INF/lib/gradle-built-1.0.jar", "non-maven-content");
         when(project.getArtifacts()).thenReturn(Set.of());
 
@@ -492,11 +492,11 @@ class GenerateSbomMojoTest {
 
         Bom bom = BomReader.readBom(output);
         assertTrue(bom.getComponents().stream().noneMatch(c -> c.getType() == Component.Type.LIBRARY),
-                "without remoteMavenCoordinatesLookup configured, a non-Maven jar must stay a generic file component");
+                "without matchers configured, a non-Maven jar must stay a generic file component");
     }
 
     @Test
-    void remoteMavenCoordinatesLookupIdentifiesNonMavenJarViaConfiguredNexus() throws Exception {
+    void nexusMatcherIdentifiesNonMavenJar() throws Exception {
         createTestJar("WEB-INF/lib/gradle-built-1.0.jar", "non-maven-content");
         when(project.getArtifacts()).thenReturn(Set.of());
 
@@ -510,16 +510,12 @@ class GenerateSbomMojoTest {
         });
         stub.start();
         try {
-            RemoteArtifactLookup remoteMavenCoordinatesLookup = new RemoteArtifactLookup();
-            remoteMavenCoordinatesLookup.setEnabled(true);
-            remoteMavenCoordinatesLookup.setCentral(false);
-            remoteMavenCoordinatesLookup.setIncludes(List.of("**/*.jar"));
-            remoteMavenCoordinatesLookup.setNexusUrl("http://127.0.0.1:" + stub.getAddress().getPort()
-                    + "/service/rest/v1/search?sha1={sha1}");
+            Nexus nexus = new Nexus();
+            nexus.setUrl("http://127.0.0.1:" + stub.getAddress().getPort() + "/service/rest/v1/search?sha1={sha1}");
 
             File output = tempDir.resolve("output.cdx.json").toFile();
             GenerateSbomMojo mojo = createMojo(output);
-            setField(mojo, "remoteMavenCoordinatesLookup", remoteMavenCoordinatesLookup);
+            setField(mojo, "mavenArtifactMatchers", List.of(nexus));
             mojo.execute();
 
             Bom bom = BomReader.readBom(output);
@@ -535,7 +531,7 @@ class GenerateSbomMojoTest {
     }
 
     @Test
-    void remoteMavenCoordinatesLookupIsSkippedInOfflineMode() throws Exception {
+    void remoteMatchersAreSkippedInOfflineMode() throws Exception {
         createTestJar("WEB-INF/lib/gradle-built-1.0.jar", "non-maven-content");
         when(project.getArtifacts()).thenReturn(Set.of());
         when(session.isOffline()).thenReturn(true);
@@ -552,14 +548,12 @@ class GenerateSbomMojoTest {
         });
         stub.start();
         try {
-            RemoteArtifactLookup remoteMavenCoordinatesLookup = new RemoteArtifactLookup();
-            remoteMavenCoordinatesLookup.setEnabled(true);
-            remoteMavenCoordinatesLookup.setNexusUrl("http://127.0.0.1:" + stub.getAddress().getPort()
-                    + "/service/rest/v1/search?sha1={sha1}");
+            Nexus nexus = new Nexus();
+            nexus.setUrl("http://127.0.0.1:" + stub.getAddress().getPort() + "/service/rest/v1/search?sha1={sha1}");
 
             File output = tempDir.resolve("output.cdx.json").toFile();
             GenerateSbomMojo mojo = createMojo(output);
-            setField(mojo, "remoteMavenCoordinatesLookup", remoteMavenCoordinatesLookup);
+            setField(mojo, "mavenArtifactMatchers", List.of(nexus));
             mojo.execute();
 
             assertEquals(0, requests.get(), "no remote request may be made in offline mode");

@@ -99,7 +99,7 @@ public class SbomContainerDescriptorHandler implements ContainerDescriptorHandle
     private boolean librariesOnly;
     private boolean attach;
     private ProductInfo product;
-    private RemoteArtifactLookup remoteMavenCoordinatesLookup;
+    private List<MavenArtifactMatcherConfig> mavenArtifactMatchers;
 
     private boolean includeBaseDir;
     private String assemblyId;
@@ -166,7 +166,7 @@ public class SbomContainerDescriptorHandler implements ContainerDescriptorHandle
             generator.setProduct(product);
             generator.setIdentityEvidence(identityEvidence);
             Bom bom;
-            try (MavenArtifactMatcher matcher = buildRemoteCoordinatesMatcher()) {
+            try (MavenArtifactMatcher matcher = buildMavenArtifactMatcher()) {
                 generator.setMavenArtifactMatcher(matcher);
                 bom = generator.generate(entries, baseDirPrefix, externalBomList,
                         assemblyId, classifier, detectArchiveType(archiver));
@@ -271,54 +271,39 @@ public class SbomContainerDescriptorHandler implements ContainerDescriptorHandle
     }
 
     /**
-     * Builds the remote coordinates lookup matcher from {@link #remoteMavenCoordinatesLookup},
-     * resolving any {@code settings.xml} server credentials it references.
+     * Builds the matcher chain from {@link #mavenArtifactMatchers}, resolving
+     * any {@code settings.xml} server credentials they reference.
      *
-     * @return the matcher, or {@code null} if remote lookup is disabled or
-     *         not usable as configured
+     * @return the matcher, or {@code null} if no matcher is configured
+     * @throws ArchiverException if the configuration is invalid
      */
-    private MavenArtifactMatcher buildRemoteCoordinatesMatcher() {
-        if (remoteMavenCoordinatesLookup == null || !remoteMavenCoordinatesLookup.isEnabled()) {
-            return null;
+    private MavenArtifactMatcher buildMavenArtifactMatcher() throws ArchiverException {
+        try {
+            return MavenArtifactMatchers.create(mavenArtifactMatchers, session.isOffline(), this::resolveCredentials)
+                    .orElse(null);
+        } catch (IllegalArgumentException e) {
+            throw new ArchiverException(e.getMessage(), e);
         }
-        if (session.isOffline()) {
-            log.warn("Maven is running in offline mode; skipping remoteMavenCoordinatesLookup, "
-                    + "so files only identifiable remotely remain file components");
-            return null;
-        }
-        Credentials nexusCredentials = resolveCredentials(remoteMavenCoordinatesLookup.getNexusServerId());
-        Credentials artifactoryCredentials = resolveCredentials(remoteMavenCoordinatesLookup.getArtifactoryServerId());
-        return RemoteCoordinatesResolver.create(remoteMavenCoordinatesLookup,
-                nexusCredentials.username(), nexusCredentials.password(),
-                artifactoryCredentials.username(), artifactoryCredentials.password())
-                .orElse(null);
-    }
-
-    private record Credentials(String username, String password) {
-        private static final Credentials NONE = new Credentials(null, null);
     }
 
     /**
      * Resolves and decrypts the username/password of a {@code settings.xml}
      * {@code <server>} entry.
      *
-     * @param serverId the server id, or {@code null}/blank for anonymous access
-     * @return the decrypted credentials, or {@link Credentials#NONE} if no
-     *         server id is configured or no matching server is found
+     * @param serverId the server id
+     * @return the decrypted credentials, or {@code null} if no matching server
+     *         is found
      */
-    private Credentials resolveCredentials(String serverId) {
-        if (serverId == null || serverId.isBlank()) {
-            return Credentials.NONE;
-        }
+    private ServerCredentials resolveCredentials(String serverId) {
         Server server = session.getSettings().getServer(serverId);
         if (server == null) {
             log.warn("No <server> with id '{}' found in settings.xml; using anonymous access", serverId);
-            return Credentials.NONE;
+            return null;
         }
         SettingsDecryptionResult result = settingsDecrypter.decrypt(
                 new DefaultSettingsDecryptionRequest(server));
         Server decrypted = result.getServer() != null ? result.getServer() : server;
-        return new Credentials(decrypted.getUsername(), decrypted.getPassword());
+        return new ServerCredentials(decrypted.getUsername(), decrypted.getPassword());
     }
 
     /**
@@ -1112,15 +1097,15 @@ public class SbomContainerDescriptorHandler implements ContainerDescriptorHandle
     }
 
     /**
-     * Sets the settings for identifying non-Maven-built archive entries
-     * (e.g. jars built with Gradle or Ant) by looking up their SHA-1
-     * checksum against Maven Central and/or an internal Nexus or
-     * Artifactory instance. Disabled by default.
+     * Sets the matchers that identify archive entries no built-in technique
+     * could match (e.g. jars built with Gradle or Ant) by their SHA-1, tried
+     * in the configured order: {@code <central/>}, {@code <nexus>} and
+     * {@code <artifactory>}. None by default.
      *
-     * @param remoteMavenCoordinatesLookup the remote lookup settings
+     * @param mavenArtifactMatchers the matcher configurations
      */
     @SuppressWarnings("unused")
-    public void setRemoteMavenCoordinatesLookup(RemoteArtifactLookup remoteMavenCoordinatesLookup) {
-        this.remoteMavenCoordinatesLookup = remoteMavenCoordinatesLookup;
+    public void setMavenArtifactMatchers(List<MavenArtifactMatcherConfig> mavenArtifactMatchers) {
+        this.mavenArtifactMatchers = mavenArtifactMatchers;
     }
 }

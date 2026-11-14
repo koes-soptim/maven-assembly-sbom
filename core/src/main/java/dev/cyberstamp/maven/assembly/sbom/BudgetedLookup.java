@@ -3,8 +3,8 @@ package dev.cyberstamp.maven.assembly.sbom;
 import java.util.Optional;
 
 /**
- * Caps the number of remote lookups shared by several
- * {@link CoordinatesLookup}s during one SBOM generation run.
+ * Caps the number of remote lookups a {@link CoordinatesLookup} performs
+ * during one SBOM generation run.
  */
 final class BudgetedLookup implements CoordinatesLookup {
 
@@ -26,23 +26,25 @@ final class BudgetedLookup implements CoordinatesLookup {
     }
 
     /**
-     * A lookup budget shared by all {@link BudgetedLookup}s of one run.
+     * The lookup budget of one matcher.
      */
     static final class Budget {
 
+        private final String matcherName;
         private final int maxLookups;
         private int used;
 
-        Budget(int maxLookups) {
+        Budget(String matcherName, int maxLookups) {
+            this.matcherName = matcherName;
             this.maxLookups = maxLookups;
         }
 
         void consume() {
             if (used >= maxLookups) {
                 throw new IllegalStateException(
-                        "remoteMavenCoordinatesLookup.maxLookups (" + maxLookups + ") exhausted; "
-                                + "raise maxLookups, or narrow includes/excludes to reduce how many "
-                                + "unmatched files are eligible for remote lookup");
+                        "<maxLookups> of <" + matcherName + "> (" + maxLookups + ") exhausted; "
+                                + "raise <maxLookups>, or narrow <includes>/<excludes> to reduce how many "
+                                + "unmatched files are eligible for lookup");
             }
             used++;
         }

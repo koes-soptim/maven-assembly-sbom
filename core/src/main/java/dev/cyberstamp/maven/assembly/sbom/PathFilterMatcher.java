@@ -53,7 +53,7 @@ final class PathFilterMatcher implements MavenArtifactMatcher {
             try {
                 matchers.add(FileSystems.getDefault().getPathMatcher("glob:" + glob.trim()));
             } catch (IllegalArgumentException e) {
-                log.warn("Ignoring invalid remoteMavenCoordinatesLookup glob pattern '{}': {}", glob, e.getMessage());
+                log.warn("Ignoring invalid mavenArtifactMatchers glob pattern '{}': {}", glob, e.getMessage());
             }
         }
         return matchers;
