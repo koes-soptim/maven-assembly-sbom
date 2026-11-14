@@ -237,7 +237,7 @@ final class RemoteCoordinatesResolver {
         try {
             sha1 = SbomUtils.computeHash(sha1Digest, entry.sourceFile().toPath());
         } catch (IOException e) {
-            log.debug("Could not hash {} for remote lookup", entry.sourceFile(), e);
+            log.warn("Could not hash {} for remote lookup: {}", entry.sourceFile(), e.toString());
             return Optional.empty();
         }
         Optional<ArtifactCoords> cached = cache.get(sha1);

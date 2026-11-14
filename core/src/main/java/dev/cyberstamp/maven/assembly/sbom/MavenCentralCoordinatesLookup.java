@@ -27,6 +27,7 @@ final class MavenCentralCoordinatesLookup implements CoordinatesLookup {
     private final HttpClient client;
     private final Duration timeout;
     private final String searchUrlTemplate;
+    private final HttpLookupSupport.FailureLog failures = new HttpLookupSupport.FailureLog("Maven Central");
 
     MavenCentralCoordinatesLookup(HttpClient client, Duration timeout) {
         this(client, timeout, DEFAULT_SEARCH_URL);
@@ -46,7 +47,7 @@ final class MavenCentralCoordinatesLookup implements CoordinatesLookup {
     @Override
     public Optional<ArtifactCoords> lookup(String sha1Hex) {
         URI uri = URI.create(searchUrlTemplate.replace(PLACEHOLDER, sha1Hex));
-        return HttpLookupSupport.get(client, uri, timeout, null)
+        return HttpLookupSupport.get(client, uri, timeout, null, failures)
                 .flatMap(body -> JsonLookupSupport.firstArrayObject(body, "docs"))
                 .flatMap(MavenCentralCoordinatesLookup::toCoords);
     }

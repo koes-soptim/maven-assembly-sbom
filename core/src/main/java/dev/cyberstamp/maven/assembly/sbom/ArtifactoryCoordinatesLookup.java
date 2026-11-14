@@ -42,6 +42,7 @@ final class ArtifactoryCoordinatesLookup implements CoordinatesLookup {
     private final HttpClient client;
     private final Duration timeout;
     private final String searchUrlTemplate;
+    private final HttpLookupSupport.FailureLog failures = new HttpLookupSupport.FailureLog("Artifactory");
     private final String basicAuthHeader;
 
     ArtifactoryCoordinatesLookup(HttpClient client, Duration timeout, String searchUrlTemplate, String basicAuthHeader) {
@@ -54,7 +55,7 @@ final class ArtifactoryCoordinatesLookup implements CoordinatesLookup {
     @Override
     public Optional<ArtifactCoords> lookup(String sha1Hex) {
         URI uri = URI.create(searchUrlTemplate.replace(PLACEHOLDER, sha1Hex));
-        return HttpLookupSupport.get(client, uri, timeout, basicAuthHeader)
+        return HttpLookupSupport.get(client, uri, timeout, basicAuthHeader, failures)
                 .flatMap(body -> JsonLookupSupport.firstArrayObject(body, "results"))
                 .flatMap(result -> JsonLookupSupport.stringField(result, "uri"))
                 .flatMap(ArtifactoryCoordinatesLookup::toCoords);
