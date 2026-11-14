@@ -278,6 +278,11 @@ public class SbomContainerDescriptorHandler implements ContainerDescriptorHandle
         if (remoteMavenCoordinatesLookup == null || !remoteMavenCoordinatesLookup.isEnabled()) {
             return null;
         }
+        if (session.isOffline()) {
+            log.warn("Maven is running in offline mode; skipping remoteMavenCoordinatesLookup, "
+                    + "so files only identifiable remotely remain file components");
+            return null;
+        }
         Credentials nexusCredentials = resolveCredentials(remoteMavenCoordinatesLookup.getNexusServerId());
         Credentials artifactoryCredentials = resolveCredentials(remoteMavenCoordinatesLookup.getArtifactoryServerId());
         return RemoteCoordinatesResolver.create(remoteMavenCoordinatesLookup,

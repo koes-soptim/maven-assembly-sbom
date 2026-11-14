@@ -207,7 +207,7 @@ All fields are optional. The same `product` element is available on the [`genera
 
 Projects that assemble artifacts built with Gradle, Ant, or anything other than Maven have no `pom.properties` or resolvable Maven dependency for those files, so they end up as generic `file` components (`pkg:generic/...`) rather than `library` components (`pkg:maven/...`). `remoteMavenCoordinatesLookup` closes that gap: for files that remain unidentified after every other (local, offline) technique, it looks up their SHA-1 content hash against Maven Central and/or an internal Nexus or Artifactory, and promotes a hit to a proper Maven `library` component.
 
-This is disabled by default and only ever runs as a last resort, after hash matching, unpacked-archive detection, embedded `pom.properties`, and external SBOM matching have all had their chance. Enabling it alone does nothing: each backend — including the public Maven Central API — must also be opted into individually, so no artifact checksum ever leaves the build unless you explicitly say where it should go:
+This is disabled by default and only ever runs as a last resort, after hash matching, unpacked-archive detection, embedded `pom.properties`, and external SBOM matching have all had their chance. It is skipped with a warning when Maven runs in offline mode (`-o`). Enabling it alone does nothing: each backend — including the public Maven Central API — must also be opted into individually, so no artifact checksum ever leaves the build unless you explicitly say where it should go:
 
 ```xml
 <containerDescriptorHandler>

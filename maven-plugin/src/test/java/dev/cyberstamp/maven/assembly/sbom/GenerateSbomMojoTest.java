@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
@@ -528,6 +529,43 @@ class GenerateSbomMojoTest {
             assertEquals("1.0", gradleBuilt.getVersion());
             assertEquals(Method.Technique.HASH_COMPARISON,
                     gradleBuilt.getEvidence().getIdentities().get(0).getMethods().get(0).getTechnique());
+        } finally {
+            stub.stop(0);
+        }
+    }
+
+    @Test
+    void remoteMavenCoordinatesLookupIsSkippedInOfflineMode() throws Exception {
+        createTestJar("WEB-INF/lib/gradle-built-1.0.jar", "non-maven-content");
+        when(project.getArtifacts()).thenReturn(Set.of());
+        when(session.isOffline()).thenReturn(true);
+
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer stub = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        stub.createContext("/service/rest/v1/search", exchange -> {
+            requests.incrementAndGet();
+            String body = "{\"items\":[{\"group\":\"org.gradle.example\",\"name\":\"gradle-built\",\"version\":\"1.0\"}]}";
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        });
+        stub.start();
+        try {
+            RemoteArtifactLookup remoteMavenCoordinatesLookup = new RemoteArtifactLookup();
+            remoteMavenCoordinatesLookup.setEnabled(true);
+            remoteMavenCoordinatesLookup.setNexusUrl("http://127.0.0.1:" + stub.getAddress().getPort()
+                    + "/service/rest/v1/search?sha1={sha1}");
+
+            File output = tempDir.resolve("output.cdx.json").toFile();
+            GenerateSbomMojo mojo = createMojo(output);
+            setField(mojo, "remoteMavenCoordinatesLookup", remoteMavenCoordinatesLookup);
+            mojo.execute();
+
+            assertEquals(0, requests.get(), "no remote request may be made in offline mode");
+            Bom bom = BomReader.readBom(output);
+            assertTrue(bom.getComponents().stream().noneMatch(c -> c.getType() == Component.Type.LIBRARY),
+                    "in offline mode a non-Maven jar must stay a generic file component");
         } finally {
             stub.stop(0);
         }
