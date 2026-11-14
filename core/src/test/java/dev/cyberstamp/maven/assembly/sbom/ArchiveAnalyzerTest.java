@@ -1215,7 +1215,7 @@ class ArchiveAnalyzerTest {
         HttpServer stub = startStubChecksumServer(
                 "{\"items\":[{\"group\":\"org.gradle.example\",\"name\":\"gradle-built\",\"version\":\"1.0\"}]}");
         try {
-            RemoteCoordinatesResolver resolver = createResolver(stub, List.of("**/*.jar"), List.of());
+            MavenArtifactMatcher resolver = createResolver(stub, List.of("**/*.jar"), List.of());
             ArchiveAnalyzer analyzer = createAnalyzerWithRemoteLookup(resolver);
 
             AssemblyComponents model = analyzer.analyze(List.of(
@@ -1240,7 +1240,7 @@ class ArchiveAnalyzerTest {
         HttpServer stub = startStubChecksumServer(
                 "{\"items\":[{\"group\":\"org.gradle.example\",\"name\":\"excluded\",\"version\":\"1.0\"}]}");
         try {
-            RemoteCoordinatesResolver resolver = createResolver(
+            MavenArtifactMatcher resolver = createResolver(
                     stub, List.of("**/*.jar"), List.of("**/excluded-*.jar"));
             ArchiveAnalyzer analyzer = createAnalyzerWithRemoteLookup(resolver);
 
@@ -1285,7 +1285,7 @@ class ArchiveAnalyzerTest {
         return server;
     }
 
-    private RemoteCoordinatesResolver createResolver(HttpServer stub, List<String> includes, List<String> excludes) {
+    private MavenArtifactMatcher createResolver(HttpServer stub, List<String> includes, List<String> excludes) {
         RemoteArtifactLookup config = new RemoteArtifactLookup();
         config.setEnabled(true);
         config.setCentral(false);

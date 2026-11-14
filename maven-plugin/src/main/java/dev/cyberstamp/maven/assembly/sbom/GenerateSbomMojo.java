@@ -232,7 +232,7 @@ public class GenerateSbomMojo extends AbstractMojo {
                 librariesOnly, schemaVersion);
         generator.setProduct(product);
         generator.setIdentityEvidence(identityEvidence);
-        generator.setMavenArtifactMatcher(buildRemoteCoordinatesResolver());
+        generator.setMavenArtifactMatcher(buildRemoteCoordinatesMatcher());
         Bom bom = generator.generate(entries, null, externalBomList,
                 null, null, project.getPackaging());
 
@@ -258,13 +258,13 @@ public class GenerateSbomMojo extends AbstractMojo {
     }
 
     /**
-     * Builds the remote checksum lookup resolver from {@link #remoteMavenCoordinatesLookup},
+     * Builds the remote coordinates lookup matcher from {@link #remoteMavenCoordinatesLookup},
      * resolving any {@code settings.xml} server credentials it references.
      *
-     * @return the resolver, or {@code null} if remote lookup is disabled or
+     * @return the matcher, or {@code null} if remote lookup is disabled or
      *         not usable as configured
      */
-    private RemoteCoordinatesResolver buildRemoteCoordinatesResolver() {
+    private MavenArtifactMatcher buildRemoteCoordinatesMatcher() {
         if (remoteMavenCoordinatesLookup == null || !remoteMavenCoordinatesLookup.isEnabled()) {
             return null;
         }

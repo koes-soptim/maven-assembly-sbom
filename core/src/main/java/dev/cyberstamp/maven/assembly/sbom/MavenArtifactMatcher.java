@@ -1,5 +1,6 @@
 package dev.cyberstamp.maven.assembly.sbom;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -21,4 +22,35 @@ interface MavenArtifactMatcher {
      *         identified
      */
     Optional<MavenMatch> match(FileEntry file);
+
+    /**
+     * Returns a matcher that offers each entry to the given matchers in order;
+     * the first match wins.
+     *
+     * @param matchers the matchers, in priority order
+     * @return the combined matcher
+     */
+    static MavenArtifactMatcher of(MavenArtifactMatcher... matchers) {
+        return of(List.of(matchers));
+    }
+
+    /**
+     * Returns a matcher that offers each entry to the given matchers in order;
+     * the first match wins.
+     *
+     * @param matchers the matchers, in priority order
+     * @return the combined matcher
+     */
+    static MavenArtifactMatcher of(List<? extends MavenArtifactMatcher> matchers) {
+        List<MavenArtifactMatcher> chain = List.copyOf(matchers);
+        return file -> {
+            for (MavenArtifactMatcher matcher : chain) {
+                Optional<MavenMatch> match = matcher.match(file);
+                if (match.isPresent()) {
+                    return match;
+                }
+            }
+            return Optional.empty();
+        };
+    }
 }

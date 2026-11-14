@@ -56,16 +56,21 @@ class RemoteCoordinatesResolverTest {
     }
 
     @Test
-    void enabledWithoutIncludesDefaultsToAllJars() {
+    void enabledWithoutIncludesDefaultsToAllJars() throws IOException {
+        AtomicInteger hits = new AtomicInteger();
+        nexusServer = startServer("/service/rest/v1/search", hits,
+                "{\"items\":[{\"group\":\"com.example\",\"name\":\"lib\",\"version\":\"1.0\"}]}");
         RemoteArtifactLookup config = new RemoteArtifactLookup();
         config.setEnabled(true);
-        config.setCentral(true);
+        config.setNexusUrl("http://127.0.0.1:" + nexusServer.getAddress().getPort()
+                + "/service/rest/v1/search?sha1=" + NexusCoordinatesLookup.PLACEHOLDER);
 
-        RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
+        MavenArtifactMatcher resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
 
-        assertTrue(resolver.isCandidate("foo.jar"));
-        assertTrue(resolver.isCandidate("lib/foo.jar"));
-        assertFalse(resolver.isCandidate("lib/foo.txt"));
+        assertTrue(resolver.match(fileEntry("foo.jar", "root")).isPresent());
+        assertTrue(resolver.match(fileEntry("lib/foo.jar", "nested")).isPresent());
+        assertTrue(resolver.match(fileEntry("lib/foo.txt", "text")).isEmpty());
+        assertEquals(2, hits.get(), "the non-JAR must not have been looked up");
     }
 
     @Test
@@ -76,7 +81,7 @@ class RemoteCoordinatesResolverTest {
         config.setCentralUrl("http://127.0.0.1:1/unreachable?sha1={sha1}");
         config.setMaxLookups(0);
 
-        RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
+        MavenArtifactMatcher resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
 
         // maxLookups=0 would make any lookup fail the build, so an empty
         // result proves the non-candidate never reached a backend
@@ -150,26 +155,11 @@ class RemoteCoordinatesResolverTest {
         config.setCentralUrl("http://127.0.0.1:" + centralServer.getAddress().getPort()
                 + "/custom-mirror/solrsearch/select?q=1:" + MavenCentralCoordinatesLookup.PLACEHOLDER);
 
-        RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
-        Optional<ArtifactCoords> result = resolver.resolve(fileEntry("lib/lib.jar", "content-a"));
+        MavenArtifactMatcher resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
+        Optional<ArtifactCoords> result = resolver.match(fileEntry("lib/lib.jar", "content-a")).map(MavenMatch::coords);
 
         assertEquals(Optional.of(ArtifactCoords.of("com.example", "lib", "1.0")), result);
         assertEquals(1, hits.get(), "the overridden URL, not the real search.maven.org, must have been called");
-    }
-
-    @Test
-    void isCandidateHonorsIncludesAndExcludes() {
-        RemoteArtifactLookup config = new RemoteArtifactLookup();
-        config.setEnabled(true);
-        config.setCentral(true);
-        config.setIncludes(List.of("**/*.jar"));
-        config.setExcludes(List.of("**/test-*.jar"));
-
-        RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
-
-        assertTrue(resolver.isCandidate("lib/foo.jar"));
-        assertFalse(resolver.isCandidate("lib/test-foo.jar"));
-        assertFalse(resolver.isCandidate("lib/foo.txt"));
     }
 
     @Test
@@ -189,10 +179,10 @@ class RemoteCoordinatesResolverTest {
         config.setArtifactoryUrl("http://127.0.0.1:" + artifactoryServer.getAddress().getPort()
                 + "/api/search/checksum?sha1=" + ArtifactoryCoordinatesLookup.PLACEHOLDER);
 
-        RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
+        MavenArtifactMatcher resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
         FileEntry entry = fileEntry("lib/lib.jar", "content-a");
 
-        Optional<ArtifactCoords> result = resolver.resolve(entry);
+        Optional<ArtifactCoords> result = resolver.match(entry).map(MavenMatch::coords);
 
         assertEquals(Optional.of(ArtifactCoords.of("com.example", "lib", "1.0")), result);
         assertEquals(1, nexusHits.get());
@@ -212,12 +202,12 @@ class RemoteCoordinatesResolverTest {
         config.setNexusUrl("http://127.0.0.1:" + nexusServer.getAddress().getPort()
                 + "/service/rest/v1/search?sha1=" + NexusCoordinatesLookup.PLACEHOLDER);
 
-        RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
+        MavenArtifactMatcher resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
         FileEntry first = fileEntry("lib/a.jar", "same-content");
         FileEntry second = fileEntry("lib/b.jar", "same-content");
 
-        resolver.resolve(first);
-        resolver.resolve(second);
+        resolver.match(first);
+        resolver.match(second);
 
         assertEquals(1, hits.get(), "second lookup of an identical-content file should hit the cache, not the network");
     }
@@ -235,11 +225,11 @@ class RemoteCoordinatesResolverTest {
                 + "/service/rest/v1/search?sha1=" + NexusCoordinatesLookup.PLACEHOLDER);
         config.setMaxLookups(1);
 
-        RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
+        MavenArtifactMatcher resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
 
-        resolver.resolve(fileEntry("lib/a.jar", "content-a"));
+        resolver.match(fileEntry("lib/a.jar", "content-a")).map(MavenMatch::coords);
         assertThrows(IllegalStateException.class,
-                () -> resolver.resolve(fileEntry("lib/b.jar", "content-b")),
+                () -> resolver.match(fileEntry("lib/b.jar", "content-b")).map(MavenMatch::coords),
                 "exhausting the lookup budget must fail loudly, not silently leave later files unidentified");
 
         assertEquals(1, hits.get(), "no backend call should be made once the lookup budget is exhausted");
