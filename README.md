@@ -216,6 +216,7 @@ This is disabled by default and only ever runs as a last resort, after hash matc
         <remoteMavenCoordinatesLookup>
             <enabled>true</enabled>
             <includes>
+                <include>*.jar</include>
                 <include>**/*.jar</include>
             </includes>
             <excludes>
@@ -233,7 +234,7 @@ This is disabled by default and only ever runs as a last resort, after hash matc
 | Field | Default | Description |
 |---|---|---|
 | `enabled` | `false` | Turns remote Maven coordinates lookup on |
-| `includes` | `**/*.jar` | Glob patterns (matched against the archive-relative path) selecting which unmatched files are eligible for lookup. Narrow this to bound how many files can trigger a network call |
+| `includes` | `*.jar`, `**/*.jar` | Glob patterns (matched against the archive-relative path) selecting which unmatched files are eligible for lookup. Note that `**/*.jar` alone does not match JARs at the archive root, hence the separate `*.jar`. Narrow this to bound how many files can trigger a network call |
 | `excludes` | _(none)_ | Glob patterns excluding otherwise-matching files |
 | `central` | `false` | Whether to query the public Maven Central search API (`search.maven.org`); needs no configuration or credentials, but is opt-in since it is the only backend that leaves the build environment entirely |
 | `centralUrl` | `search.maven.org` | Overrides the built-in Maven Central search URL, with a literal `{sha1}` in place of the content hash. Only used when `central` is `true`. See [Writing the search URL](#writing-the-search-url) below |

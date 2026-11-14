@@ -13,7 +13,7 @@ import java.util.List;
  * Disabled by default. When {@linkplain #isEnabled() enabled}, every backend
  * (Maven Central, Nexus, Artifactory) must also be opted into individually —
  * nothing is queried implicitly. If no {@linkplain #getIncludes() include}
- * glob pattern is configured, lookup defaults to {@code **&#47;*.jar} rather
+ * glob pattern is configured, lookup defaults to {@code *.jar} and {@code **&#47;*.jar} rather
  * than being skipped, so {@code enabled=true} alone is enough to try; set
  * {@link #setIncludes(List)} explicitly to narrow which unmatched files
  * trigger a network call. The lookup only ever runs for archive entries that
@@ -66,7 +66,7 @@ public class RemoteArtifactLookup {
     /**
      * Sets the include glob patterns. When {@link #isEnabled()} is
      * {@code true} and this is left unset (or empty), lookup defaults to
-     * {@code **&#47;*.jar}. Set this explicitly to narrow the subset of
+     * {@code *.jar} and {@code **&#47;*.jar}. Set this explicitly to narrow the subset of
      * unmatched files that can trigger a network call.
      *
      * @param includes the include patterns

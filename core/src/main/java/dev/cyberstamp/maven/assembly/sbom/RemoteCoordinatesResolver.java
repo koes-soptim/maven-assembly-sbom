@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * Built once per SBOM generation run via {@link #create}, which returns
  * empty when remote lookup is disabled or not usable (no backend configured —
- * missing include patterns instead default to {@code **&#47;*.jar}) — callers
+ * missing include patterns instead default to {@code *.jar} and {@code **&#47;*.jar}) — callers
  * should treat an empty result as "feature off" and skip this step entirely.
  * </p>
  *
@@ -42,7 +42,7 @@ final class RemoteCoordinatesResolver {
      * Fallback include pattern used when {@link RemoteArtifactLookup#getIncludes()}
      * is unset, so that enabling the feature alone is enough to try it.
      */
-    private static final List<String> DEFAULT_INCLUDES = List.of("**/*.jar");
+    private static final List<String> DEFAULT_INCLUDES = List.of("*.jar", "**/*.jar");
 
     private final List<PathMatcher> includeMatchers;
     private final List<PathMatcher> excludeMatchers;

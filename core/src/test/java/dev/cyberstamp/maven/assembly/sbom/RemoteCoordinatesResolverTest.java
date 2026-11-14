@@ -63,6 +63,7 @@ class RemoteCoordinatesResolverTest {
 
         RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
 
+        assertTrue(resolver.isCandidate("foo.jar"));
         assertTrue(resolver.isCandidate("lib/foo.jar"));
         assertFalse(resolver.isCandidate("lib/foo.txt"));
     }
