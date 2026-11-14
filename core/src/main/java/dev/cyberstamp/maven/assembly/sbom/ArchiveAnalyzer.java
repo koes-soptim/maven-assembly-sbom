@@ -70,7 +70,7 @@ class ArchiveAnalyzer {
     private final Map<ArtifactCoords, MavenProject> reactorModuleIndex;
     private final List<Bom> externalBoms;
     private final boolean detectEmbeddedSboms;
-    private final RemoteCoordinatesResolver remoteCoordinatesResolver;
+    private final MavenArtifactMatcher mavenArtifactMatcher;
     private boolean identityEvidence = true;
     private List<Artifact> allArtifacts;
     private ArtifactHashIndex hashIndex;
@@ -154,7 +154,7 @@ class ArchiveAnalyzer {
             boolean failOnDuplicateHash,
             List<Bom> externalBoms,
             boolean detectEmbeddedSboms,
-            RemoteCoordinatesResolver remoteCoordinatesResolver) {
+            MavenArtifactMatcher mavenArtifactMatcher) {
         this.effectiveModelResolver = effectiveModelResolver;
         this.repoSystem = repoSystem;
         this.project = project;
@@ -164,7 +164,7 @@ class ArchiveAnalyzer {
         this.reactorModuleIndex = indexReactorModules(session.getProjects());
         this.externalBoms = externalBoms;
         this.detectEmbeddedSboms = detectEmbeddedSboms;
-        this.remoteCoordinatesResolver = remoteCoordinatesResolver;
+        this.mavenArtifactMatcher = mavenArtifactMatcher;
     }
 
     /**
@@ -247,8 +247,8 @@ class ArchiveAnalyzer {
         if (!unmatchedByPath.isEmpty()) {
             matchAgainstExternalSboms(unmatchedByPath, content);
         }
-        if (!unmatchedByPath.isEmpty() && remoteCoordinatesResolver != null) {
-            resolveUnmatchedViaRemoteLookup(unmatchedByPath, content);
+        if (!unmatchedByPath.isEmpty() && mavenArtifactMatcher != null) {
+            matchUnmatchedEntries(unmatchedByPath, content);
         }
         if (detectEmbeddedSboms) {
             Set<String> detectedSbomPaths = new HashSet<>();
@@ -458,30 +458,26 @@ class ArchiveAnalyzer {
     }
 
     /**
-     * Looks up still-unmatched entries (files that no local/offline
-     * technique could identify) by SHA-1 checksum against the configured
-     * remote repositories. Identified entries are removed from
-     * {@code unmatchedByPath}, exactly as {@link #detectMavenMetadataInUnmatchedJars}
-     * does for local {@code pom.properties} hits — this is the last resort,
-     * run only once every free, local technique has had its chance.
+     * Offers still-unmatched entries (files that no local/offline technique
+     * could identify) to the configured {@link MavenArtifactMatcher}.
+     * Identified entries are removed from {@code unmatchedByPath}, exactly as
+     * {@link #detectMavenMetadataInUnmatchedJars} does for local
+     * {@code pom.properties} hits — this is the last resort, run only once
+     * every free, local technique has had its chance.
      */
-    private void resolveUnmatchedViaRemoteLookup(
+    private void matchUnmatchedEntries(
             Map<String, FileEntry> unmatchedByPath,
             AssemblyComponentsBuilder content) {
         var it = unmatchedByPath.entrySet().iterator();
         while (it.hasNext()) {
-            var mapEntry = it.next();
-            FileEntry fileEntry = mapEntry.getValue();
-            if (!remoteCoordinatesResolver.isCandidate(fileEntry.archivePath())) {
-                continue;
-            }
-            Optional<ArtifactCoords> coords = remoteCoordinatesResolver.resolve(fileEntry);
-            if (coords.isEmpty()) {
+            FileEntry fileEntry = it.next().getValue();
+            Optional<MavenMatch> match = mavenArtifactMatcher.match(fileEntry);
+            if (match.isEmpty()) {
                 continue;
             }
             content.addMavenEntry(new AssemblyComponentsBuilder.MavenEntry(
-                    coords.get(), fileEntry.archivePath(), fileEntry.hash(),
-                    Identification.remoteCoordinatesLookup()));
+                    match.get().coords(), fileEntry.archivePath(), fileEntry.hash(),
+                    match.get().identification()));
             it.remove();
         }
     }

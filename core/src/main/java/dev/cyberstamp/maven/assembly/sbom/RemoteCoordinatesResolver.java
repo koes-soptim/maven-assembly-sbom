@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
  * the {@link ArchiveAnalyzer} pipeline.
  * </p>
  */
-final class RemoteCoordinatesResolver {
+final class RemoteCoordinatesResolver implements MavenArtifactMatcher {
 
     private static final Logger log = LoggerFactory.getLogger(RemoteCoordinatesResolver.class);
 
@@ -182,6 +182,18 @@ final class RemoteCoordinatesResolver {
             }
         }
         return matchers;
+    }
+
+    /**
+     * Identifies the entry by remote lookup if it is a
+     * {@linkplain #isCandidate(String) candidate}.
+     */
+    @Override
+    public Optional<MavenMatch> match(FileEntry file) {
+        if (!isCandidate(file.archivePath())) {
+            return Optional.empty();
+        }
+        return resolve(file).map(coords -> new MavenMatch(coords, Identification.remoteCoordinatesLookup()));
     }
 
     /**

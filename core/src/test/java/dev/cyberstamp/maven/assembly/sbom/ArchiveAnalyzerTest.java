@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -1255,6 +1256,23 @@ class ArchiveAnalyzerTest {
         }
     }
 
+    @Test
+    void unmatchedJarIdentifiedByMatcherCarriesTheMatchersIdentification() throws Exception {
+        Path jar = createTestJar("custom-1.0.jar", "matcher-content");
+        Identification custom = new Identification(Technique.OTHER, 0.42);
+        MavenArtifactMatcher matcher = file -> Optional.of(
+                new MavenMatch(ArtifactCoords.of("org.example", "custom", "1.0"), custom));
+
+        AssemblyComponents model = createAnalyzerWithRemoteLookup(matcher).analyze(List.of(
+                new FileEntry("lib/custom-1.0.jar", SbomUtils.computeHash(digest, jar), jar.toFile())), null);
+
+        List<PackageComponent> packages = extractPackageComponents(model);
+        assertEquals(1, packages.size());
+        assertEquals(ArtifactCoords.of("org.example", "custom", "1.0"), packages.get(0).ref());
+        assertEquals(custom, packages.get(0).identification());
+        assertEquals(0, extractFileComponents(model).size());
+    }
+
     private HttpServer startStubChecksumServer(String responseBody) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/service/rest/v1/search", exchange -> {
@@ -1278,7 +1296,7 @@ class ArchiveAnalyzerTest {
         return RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
     }
 
-    private ArchiveAnalyzer createAnalyzerWithRemoteLookup(RemoteCoordinatesResolver resolver) {
+    private ArchiveAnalyzer createAnalyzerWithRemoteLookup(MavenArtifactMatcher resolver) {
         return new ArchiveAnalyzer(
                 effectiveModelResolver, repoSystem, project, session, digest,
                 false, List.of(), true, resolver);

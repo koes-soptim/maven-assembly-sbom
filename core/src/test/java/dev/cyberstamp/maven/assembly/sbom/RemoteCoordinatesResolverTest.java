@@ -69,6 +69,21 @@ class RemoteCoordinatesResolverTest {
     }
 
     @Test
+    void matchSkipsNonCandidatesWithoutLookingThemUp() throws IOException {
+        RemoteArtifactLookup config = new RemoteArtifactLookup();
+        config.setEnabled(true);
+        config.setCentral(true);
+        config.setCentralUrl("http://127.0.0.1:1/unreachable?sha1={sha1}");
+        config.setMaxLookups(0);
+
+        RemoteCoordinatesResolver resolver = RemoteCoordinatesResolver.create(config, null, null, null, null).orElseThrow();
+
+        // maxLookups=0 would make any lookup fail the build, so an empty
+        // result proves the non-candidate never reached a backend
+        assertTrue(resolver.match(fileEntry("lib/readme.txt", "text")).isEmpty());
+    }
+
+    @Test
     void centralIsDisabledByDefault() {
         RemoteArtifactLookup config = new RemoteArtifactLookup();
 

@@ -59,7 +59,7 @@ public class SbomGenerator {
 
     private ProductInfo product;
     private boolean identityEvidence = true;
-    private RemoteCoordinatesResolver remoteCoordinatesResolver;
+    private MavenArtifactMatcher mavenArtifactMatcher;
     private LicenseEnrichment licenseEnrichment;
     private List<org.eclipse.aether.graph.Dependency> cachedManagedDeps;
     private ArchiveAnalyzer lastAnalyzer;
@@ -106,14 +106,13 @@ public class SbomGenerator {
     }
 
     /**
-     * Sets the resolver used to identify otherwise-unmatched (e.g.
-     * non-Maven-built) archive entries by remote lookup.
+     * Sets the matcher used to identify otherwise-unmatched (e.g.
+     * non-Maven-built) archive entries.
      *
-     * @param remoteCoordinatesResolver the resolver, or {@code null} to disable
-     *        remote lookup
+     * @param mavenArtifactMatcher the matcher, or {@code null} to disable
      */
-    void setRemoteCoordinatesResolver(RemoteCoordinatesResolver remoteCoordinatesResolver) {
-        this.remoteCoordinatesResolver = remoteCoordinatesResolver;
+    void setMavenArtifactMatcher(MavenArtifactMatcher mavenArtifactMatcher) {
+        this.mavenArtifactMatcher = mavenArtifactMatcher;
     }
 
     /**
@@ -187,7 +186,7 @@ public class SbomGenerator {
         lastAnalyzer = new ArchiveAnalyzer(
                 effectiveModelResolver, repoSystem,
                 project, session, messageDigest, failOnDuplicateHash,
-                externalBoms, detectEmbeddedSboms, remoteCoordinatesResolver);
+                externalBoms, detectEmbeddedSboms, mavenArtifactMatcher);
         lastAnalyzer.setIdentityEvidence(identityEvidence);
         return lastAnalyzer.analyze(entries, baseDirPrefix);
     }

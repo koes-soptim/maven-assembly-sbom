@@ -232,7 +232,7 @@ public class GenerateSbomMojo extends AbstractMojo {
                 librariesOnly, schemaVersion);
         generator.setProduct(product);
         generator.setIdentityEvidence(identityEvidence);
-        generator.setRemoteCoordinatesResolver(buildRemoteCoordinatesResolver());
+        generator.setMavenArtifactMatcher(buildRemoteCoordinatesResolver());
         Bom bom = generator.generate(entries, null, externalBomList,
                 null, null, project.getPackaging());
 
