@@ -58,6 +58,48 @@ class NexusCoordinatesLookupTest {
     }
 
     @Test
+    void takesClassifierAndExtensionFromTheAssetWithMatchingChecksum() {
+        respondWith(200, "{\"items\":[{\"group\":\"com.example\",\"name\":\"lib\",\"version\":\"2.0\","
+                + "\"assets\":["
+                + asset("0000", "com.example", "lib", "2.0", "jar", null)
+                + "," + asset("abc123", "com.example", "lib", "2.0", "jar", "jdk8")
+                + "]}]}");
+
+        Optional<ArtifactCoords> result = lookup(null).lookup("abc123");
+
+        assertEquals(Optional.of(new ArtifactCoords("com.example", "lib", "2.0", "jar", "jdk8")), result);
+    }
+
+    @Test
+    void matchingAssetWithoutClassifierIsTheMainArtifact() {
+        respondWith(200, "{\"items\":[{\"group\":\"com.example\",\"name\":\"app\",\"version\":\"2.0\","
+                + "\"assets\":[" + asset("ABC123", "com.example", "app", "2.0", "war", null) + "]}]}");
+
+        Optional<ArtifactCoords> result = lookup(null).lookup("abc123");
+
+        assertEquals(Optional.of(new ArtifactCoords("com.example", "app", "2.0", "war", null)), result,
+                "checksums are compared case-insensitively and the extension becomes the type");
+    }
+
+    @Test
+    void fallsBackToComponentCoordinatesWithoutMatchingAsset() {
+        respondWith(200, "{\"items\":[{\"group\":\"com.example\",\"name\":\"lib\",\"version\":\"2.0\","
+                + "\"assets\":[{\"checksum\":{\"sha1\":\"abc123\"}}]}]}");
+
+        assertEquals(Optional.of(ArtifactCoords.of("com.example", "lib", "2.0")), lookup(null).lookup("abc123"),
+                "an asset without maven2 attributes must not hide the component's coordinates");
+    }
+
+    private static String asset(String sha1, String groupId, String artifactId, String version, String extension,
+            String classifier) {
+        return "{\"checksum\":{\"sha1\":\"" + sha1 + "\"},\"maven2\":{"
+                + "\"groupId\":\"" + groupId + "\",\"artifactId\":\"" + artifactId + "\","
+                + "\"version\":\"" + version + "\",\"extension\":\"" + extension + "\""
+                + (classifier != null ? ",\"classifier\":\"" + classifier + "\"" : "")
+                + "}}";
+    }
+
+    @Test
     void sendsAuthorizationHeaderWhenConfigured() {
         respondWith(200, "{\"items\":[]}");
         String auth = HttpLookupSupport.basicAuthHeader("alice", "s3cr3t");

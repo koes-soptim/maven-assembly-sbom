@@ -27,6 +27,23 @@ final class JsonLookupSupport {
     }
 
     /**
+     * Parses a JSON document.
+     *
+     * @param json the JSON document, or {@code null}
+     * @return the root node, or empty if the input is {@code null} or malformed
+     */
+    static Optional<JsonNode> parse(String json) {
+        if (json == null) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.ofNullable(MAPPER.readTree(json));
+        } catch (JsonProcessingException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * Returns the first JSON object in the array value of {@code arrayKey},
      * serialized back to a JSON string, e.g. for
      * {@code {"docs":[{"a":1},{"a":2}]}} and {@code arrayKey="docs"},

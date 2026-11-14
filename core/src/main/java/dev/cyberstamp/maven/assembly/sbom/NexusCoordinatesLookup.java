@@ -5,6 +5,8 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.Optional;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 /**
  * Looks up Maven coordinates by SHA-1 against an internal Nexus Repository
  * Manager 3 instance, using its REST search API.
@@ -12,8 +14,16 @@ import java.util.Optional;
  * <p>
  * Targets Nexus 3 only; Nexus 2 (whose search API differs) has reached
  * end-of-life and is out of scope. The response is expected in Nexus 3's
- * search-result shape: a top-level {@code items} array, each with
- * {@code group}/{@code name}/{@code version} fields.
+ * search-result shape: a top-level {@code items} array of components, each
+ * with {@code group}/{@code name}/{@code version} fields and an
+ * {@code assets} array.
+ * </p>
+ *
+ * <p>
+ * The coordinates are taken from the {@code maven2} attributes of the asset
+ * whose {@code checksum.sha1} matches, which include the asset's classifier
+ * and extension. If no asset carries a matching checksum, the component's
+ * {@code group}/{@code name}/{@code version} are used, without a classifier.
  * </p>
  *
  * <p>
@@ -52,17 +62,47 @@ final class NexusCoordinatesLookup implements CoordinatesLookup {
     public Optional<ArtifactCoords> lookup(String sha1Hex) {
         URI uri = URI.create(searchUrlTemplate.replace(PLACEHOLDER, sha1Hex));
         return HttpLookupSupport.get(client, uri, timeout, basicAuthHeader, failures)
-                .flatMap(body -> JsonLookupSupport.firstArrayObject(body, "items"))
-                .flatMap(NexusCoordinatesLookup::toCoords);
+                .flatMap(JsonLookupSupport::parse)
+                .flatMap(root -> toCoords(root.path("items"), sha1Hex));
     }
 
-    private static Optional<ArtifactCoords> toCoords(String item) {
-        Optional<String> groupId = JsonLookupSupport.stringField(item, "group");
-        Optional<String> artifactId = JsonLookupSupport.stringField(item, "name");
-        Optional<String> version = JsonLookupSupport.stringField(item, "version");
-        if (groupId.isEmpty() || artifactId.isEmpty() || version.isEmpty()) {
+    private static Optional<ArtifactCoords> toCoords(JsonNode items, String sha1Hex) {
+        for (JsonNode item : items) {
+            for (JsonNode asset : item.path("assets")) {
+                if (sha1Hex.equalsIgnoreCase(asset.path("checksum").path("sha1").asText())) {
+                    Optional<ArtifactCoords> coords = fromMaven2Attributes(asset.path("maven2"));
+                    if (coords.isPresent()) {
+                        return coords;
+                    }
+                }
+            }
+        }
+        return fromComponent(items.path(0));
+    }
+
+    private static Optional<ArtifactCoords> fromMaven2Attributes(JsonNode maven2) {
+        String groupId = text(maven2, "groupId");
+        String artifactId = text(maven2, "artifactId");
+        String version = text(maven2, "version");
+        if (groupId == null || artifactId == null || version == null) {
             return Optional.empty();
         }
-        return Optional.of(ArtifactCoords.of(groupId.get(), artifactId.get(), version.get()));
+        return Optional.of(new ArtifactCoords(groupId, artifactId, version,
+                text(maven2, "extension"), text(maven2, "classifier")));
+    }
+
+    private static Optional<ArtifactCoords> fromComponent(JsonNode item) {
+        String groupId = text(item, "group");
+        String artifactId = text(item, "name");
+        String version = text(item, "version");
+        if (groupId == null || artifactId == null || version == null) {
+            return Optional.empty();
+        }
+        return Optional.of(ArtifactCoords.of(groupId, artifactId, version));
+    }
+
+    private static String text(JsonNode node, String field) {
+        JsonNode value = node.path(field);
+        return value.isTextual() && !value.asText().isBlank() ? value.asText() : null;
     }
 }
