@@ -165,9 +165,12 @@ public class SbomContainerDescriptorHandler implements ContainerDescriptorHandle
                     librariesOnly, schemaVersion);
             generator.setProduct(product);
             generator.setIdentityEvidence(identityEvidence);
-            generator.setMavenArtifactMatcher(buildRemoteCoordinatesMatcher());
-            Bom bom = generator.generate(entries, baseDirPrefix, externalBomList,
-                    assemblyId, classifier, detectArchiveType(archiver));
+            Bom bom;
+            try (MavenArtifactMatcher matcher = buildRemoteCoordinatesMatcher()) {
+                generator.setMavenArtifactMatcher(matcher);
+                bom = generator.generate(entries, baseDirPrefix, externalBomList,
+                        assemblyId, classifier, detectArchiveType(archiver));
+            }
 
             if (log.isDebugEnabled()) {
                 logBomSummary(bom);

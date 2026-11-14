@@ -69,4 +69,9 @@ final class PathFilterMatcher implements MavenArtifactMatcher {
         return includes.stream().anyMatch(m -> m.matches(path))
                 && excludes.stream().noneMatch(m -> m.matches(path));
     }
+
+    @Override
+    public void close() {
+        delegate.close();
+    }
 }

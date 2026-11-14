@@ -5,6 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -72,6 +74,50 @@ class MavenArtifactMatcherTest {
 
         assertThrows(IllegalStateException.class, () -> second.match(entry("b.jar", "b")));
         assertEquals(1, lookups.get());
+    }
+
+    @Test
+    void chainClosesAllMatchersEvenIfOneFails() {
+        List<String> closed = new ArrayList<>();
+        MavenArtifactMatcher chain = MavenArtifactMatcher.of(
+                closing("first", closed, null),
+                closing("second", closed, new IllegalStateException("second")),
+                closing("third", closed, new IllegalStateException("third")));
+
+        IllegalStateException e = assertThrows(IllegalStateException.class, chain::close);
+
+        assertEquals(List.of("first", "second", "third"), closed);
+        assertEquals("second", e.getMessage());
+        assertEquals("third", e.getSuppressed()[0].getMessage());
+    }
+
+    @Test
+    void decoratorsCloseTheirDelegate() {
+        List<String> closed = new ArrayList<>();
+        MavenArtifactMatcher decorated = PathFilterMatcher.of(
+                new CachingMatcher(closing("inner", closed, null), new Sha1Hasher()),
+                List.of("*.jar"), List.of()).orElseThrow();
+
+        decorated.close();
+
+        assertEquals(List.of("inner"), closed);
+    }
+
+    private static MavenArtifactMatcher closing(String name, List<String> closed, RuntimeException failure) {
+        return new MavenArtifactMatcher() {
+            @Override
+            public Optional<MavenMatch> match(FileEntry file) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void close() {
+                closed.add(name);
+                if (failure != null) {
+                    throw failure;
+                }
+            }
+        };
     }
 
     private FileEntry entry(String name, String content) throws IOException {

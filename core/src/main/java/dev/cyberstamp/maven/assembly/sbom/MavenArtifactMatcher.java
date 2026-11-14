@@ -6,8 +6,13 @@ import java.util.Optional;
 /**
  * Identifies an archive entry that no built-in technique could match as a
  * Maven artifact, e.g. by looking up its content hash in a remote repository.
+ *
+ * <p>
+ * A matcher may hold resources for the duration of an SBOM generation run;
+ * whoever creates it closes it once the run is done.
+ * </p>
  */
-interface MavenArtifactMatcher {
+interface MavenArtifactMatcher extends AutoCloseable {
 
     /**
      * Attempts to identify the given file entry.
@@ -24,8 +29,15 @@ interface MavenArtifactMatcher {
     Optional<MavenMatch> match(FileEntry file);
 
     /**
+     * Releases resources held by this matcher. Does nothing by default.
+     */
+    @Override
+    default void close() {
+    }
+
+    /**
      * Returns a matcher that offers each entry to the given matchers in order;
-     * the first match wins.
+     * the first match wins. Closing it closes all given matchers.
      *
      * @param matchers the matchers, in priority order
      * @return the combined matcher
@@ -36,21 +48,12 @@ interface MavenArtifactMatcher {
 
     /**
      * Returns a matcher that offers each entry to the given matchers in order;
-     * the first match wins.
+     * the first match wins. Closing it closes all given matchers.
      *
      * @param matchers the matchers, in priority order
      * @return the combined matcher
      */
     static MavenArtifactMatcher of(List<? extends MavenArtifactMatcher> matchers) {
-        List<MavenArtifactMatcher> chain = List.copyOf(matchers);
-        return file -> {
-            for (MavenArtifactMatcher matcher : chain) {
-                Optional<MavenMatch> match = matcher.match(file);
-                if (match.isPresent()) {
-                    return match;
-                }
-            }
-            return Optional.empty();
-        };
+        return new MatcherChain(matchers);
     }
 }

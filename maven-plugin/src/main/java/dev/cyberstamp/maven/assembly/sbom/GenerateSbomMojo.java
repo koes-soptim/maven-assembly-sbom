@@ -232,9 +232,12 @@ public class GenerateSbomMojo extends AbstractMojo {
                 librariesOnly, schemaVersion);
         generator.setProduct(product);
         generator.setIdentityEvidence(identityEvidence);
-        generator.setMavenArtifactMatcher(buildRemoteCoordinatesMatcher());
-        Bom bom = generator.generate(entries, null, externalBomList,
-                null, null, project.getPackaging());
+        Bom bom;
+        try (MavenArtifactMatcher matcher = buildRemoteCoordinatesMatcher()) {
+            generator.setMavenArtifactMatcher(matcher);
+            bom = generator.generate(entries, null, externalBomList,
+                    null, null, project.getPackaging());
+        }
 
         if (outputFile.getParentFile() != null) {
             outputFile.getParentFile().mkdirs();

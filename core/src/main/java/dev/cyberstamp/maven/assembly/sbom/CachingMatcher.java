@@ -35,4 +35,9 @@ final class CachingMatcher implements MavenArtifactMatcher {
         cache.put(sha1.get(), result);
         return result;
     }
+
+    @Override
+    public void close() {
+        delegate.close();
+    }
 }
