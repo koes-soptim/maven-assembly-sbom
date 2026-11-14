@@ -6,6 +6,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Looks up Maven coordinates by SHA-1 against an internal JFrog Artifactory
@@ -17,6 +19,16 @@ import java.util.Optional;
  * {@code uri} of the matching item instead. Coordinates are recovered from
  * that path by assuming the standard Maven2 repository layout:
  * {@code .../api/storage/<repoKey>/<groupPath>/<artifactId>/<version>/<file>}.
+ * </p>
+ *
+ * <p>
+ * The classifier and extension are read, on a best-effort basis, from a file
+ * name of the form {@code <artifactId>-<version>[-<classifier>].<extension>},
+ * including timestamped snapshots
+ * ({@code <artifactId>-1.0-20240101.123456-1[-<classifier>].<extension>}).
+ * A classifier ends at its first dot, so classifiers that themselves contain a
+ * dot are misread. If the file name does not follow this form, the
+ * coordinates are reported without classifier.
  * </p>
  *
  * <p>
@@ -38,6 +50,11 @@ final class ArtifactoryCoordinatesLookup implements CoordinatesLookup {
      * search URL.
      */
     static final String PLACEHOLDER = "{sha1}";
+
+    /**
+     * The {@code yyyyMMdd.HHmmss-buildNumber} part of a timestamped snapshot file name.
+     */
+    private static final Pattern SNAPSHOT_TIMESTAMP = Pattern.compile("\\d{8}\\.\\d{6}-\\d+");
 
     private final HttpClient client;
     private final Duration timeout;
@@ -97,6 +114,54 @@ final class ArtifactoryCoordinatesLookup implements CoordinatesLookup {
             return Optional.empty();
         }
         String groupId = String.join(".", groupPath);
-        return Optional.of(ArtifactCoords.of(groupId, artifactId, version));
+        return Optional.of(fromFileName(groupId, artifactId, version, repoRelative.get(size - 1)));
+    }
+
+    /**
+     * Derives the classifier and extension from a Maven2-layout file name,
+     * falling back to coordinates without classifier if the name does not
+     * start with {@code <artifactId>-<version>}.
+     */
+    static ArtifactCoords fromFileName(String groupId, String artifactId, String version, String fileName) {
+        ArtifactCoords plain = ArtifactCoords.of(groupId, artifactId, version);
+        String prefix = artifactId + "-";
+        if (!fileName.startsWith(prefix)) {
+            return plain;
+        }
+        String rest = fileName.substring(prefix.length());
+        int versionLength = fileVersionLength(rest, version);
+        if (versionLength < 0) {
+            return plain;
+        }
+        String tail = rest.substring(versionLength);
+        if (tail.startsWith(".") && tail.length() > 1) {
+            return new ArtifactCoords(groupId, artifactId, version, tail.substring(1), null);
+        }
+        int dot = tail.indexOf('.');
+        if (tail.startsWith("-") && dot > 1 && dot < tail.length() - 1) {
+            return new ArtifactCoords(groupId, artifactId, version, tail.substring(dot + 1), tail.substring(1, dot));
+        }
+        return plain;
+    }
+
+    /**
+     * Returns the length of the version as it appears at the start of
+     * {@code rest}: the version itself, or for a snapshot either
+     * {@code X-SNAPSHOT} or its timestamped form; {@code -1} if neither.
+     */
+    private static int fileVersionLength(String rest, String version) {
+        if (rest.startsWith(version)) {
+            return version.length();
+        }
+        String snapshotSuffix = "SNAPSHOT";
+        if (!version.endsWith("-" + snapshotSuffix)) {
+            return -1;
+        }
+        String base = version.substring(0, version.length() - snapshotSuffix.length());
+        if (!rest.startsWith(base)) {
+            return -1;
+        }
+        Matcher timestamp = SNAPSHOT_TIMESTAMP.matcher(rest).region(base.length(), rest.length());
+        return timestamp.lookingAt() ? timestamp.end() : -1;
     }
 }

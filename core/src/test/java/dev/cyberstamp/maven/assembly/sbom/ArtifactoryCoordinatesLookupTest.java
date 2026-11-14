@@ -73,6 +73,54 @@ class ArtifactoryCoordinatesLookupTest {
     }
 
     @Test
+    void recoversClassifierFromStorageUri() {
+        respondWith(200, "{\"results\":[{\"uri\":\"https://artifactory.example.com/artifactory/api/storage/"
+                + "libs-release-local/org/example/lib/2.0/lib-2.0-jdk8.jar\"}]}");
+
+        assertEquals(Optional.of(new ArtifactCoords("org.example", "lib", "2.0", "jar", "jdk8")),
+                lookup(null).lookup("abc123"));
+    }
+
+    @Test
+    void fileNameWithoutClassifierIsTheMainArtifact() {
+        assertEquals(new ArtifactCoords("g", "lib", "2.0", "jar", null),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "2.0", "lib-2.0.jar"));
+        assertEquals(new ArtifactCoords("g", "app", "2.0", "war", null),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "app", "2.0", "app-2.0.war"));
+    }
+
+    @Test
+    void fileNameClassifierAndCompoundExtension() {
+        assertEquals(new ArtifactCoords("g", "lib", "2.0", "jar", "linux-x86_64"),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "2.0", "lib-2.0-linux-x86_64.jar"));
+        assertEquals(new ArtifactCoords("g", "dist", "2.0", "tar.gz", "bin"),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "dist", "2.0", "dist-2.0-bin.tar.gz"));
+        assertEquals(new ArtifactCoords("g", "lib", "2.0", "test-jar", null),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "2.0", "lib-2.0-tests.jar"),
+                "jar with the tests classifier is the test-jar type");
+    }
+
+    @Test
+    void timestampedAndPlainSnapshotFileNames() {
+        assertEquals(new ArtifactCoords("g", "lib", "1.0-SNAPSHOT", "jar", "jdk8"),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "1.0-SNAPSHOT", "lib-1.0-20240101.123456-7-jdk8.jar"));
+        assertEquals(new ArtifactCoords("g", "lib", "1.0-SNAPSHOT", "jar", null),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "1.0-SNAPSHOT", "lib-1.0-20240101.123456-7.jar"));
+        assertEquals(new ArtifactCoords("g", "lib", "1.0-SNAPSHOT", "jar", null),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "1.0-SNAPSHOT", "lib-1.0-SNAPSHOT.jar"));
+    }
+
+    @Test
+    void unexpectedFileNameFallsBackToCoordinatesWithoutClassifier() {
+        assertEquals(ArtifactCoords.of("g", "lib", "2.0"),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "2.0", "renamed.jar"));
+        assertEquals(ArtifactCoords.of("g", "lib", "2.0"),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "2.0", "lib-2.1.jar"));
+        assertEquals(ArtifactCoords.of("g", "lib", "2.0"),
+                ArtifactoryCoordinatesLookup.fromFileName("g", "lib", "2.0", "lib-2.0"));
+    }
+
+    @Test
     void sendsAuthorizationHeaderWhenConfigured() {
         respondWith(200, "{\"results\":[]}");
         String auth = HttpLookupSupport.basicAuthHeader("bob", "hunter2");

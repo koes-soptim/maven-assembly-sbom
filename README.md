@@ -244,6 +244,14 @@ Each element enables one matcher: `<central/>` for the public Maven Central sear
 
 Credentials are never written into the POM: `serverId` references a `<server>` entry in `settings.xml` (optionally with an encrypted password, like any other Maven credential), resolved at build time. An invalid configuration, such as a missing `url` or a `url` without `{sha1}`, fails the build. The same `mavenArtifactMatchers` element is available on the [`generate` goal](#generate-goal).
 
+##### How coordinates are determined
+
+A matcher only reports a match when the repository knows a file with exactly the same SHA-1, so it finds files whose bytes were published as-is (typically third-party libraries), not ones rebuilt locally. How the coordinates are read from the answer differs per repository:
+
+- **Nexus** reports the coordinates of the matching asset, including its classifier and extension. If the asset carries no Maven attributes, the component's group, name and version are used without a classifier.
+- **Artifactory** only reports the path of the matching file. The coordinates are derived from it assuming the standard Maven repository layout; the classifier and extension come from a file name of the form `<artifactId>-<version>[-<classifier>].<extension>`, including timestamped snapshots. This is best-effort: a classifier containing a dot is misread, and files outside a Maven-layout repository are not matched.
+- **Maven Central**'s search API does not say which file of an artifact matched, so a match is always reported as the main artifact, without a classifier.
+
 ##### Writing the search URL
 
 `url` takes the **complete search request**, not just a server address. Write it exactly as you'd call it with `curl`, but with a literal `{sha1}` where the content hash goes. At lookup time, the plugin only substitutes `{sha1}` with the actual hash and calls the URL as-is; it never builds or guesses any part of the request itself. Maven Central has a working default, so its `url` is purely an optional override.
